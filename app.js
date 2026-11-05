@@ -9,8 +9,19 @@ var UNITS = ["kg", "gram", "quintal", "piece", "meter", "than", "set", "box", "d
 var state = {
   status: null, session: null, view: "loading", err: "", confirmKey: null,
   catalog: null, q: "", cat: "", itemId: null,
-  admin: null, tab: "items", draft: null, custDraft: null, share: null, busy: false
+  admin: null, tab: "items", draft: null, custDraft: null, share: null, busy: false,
+  installEvent: null, showInstallHelp: false, pushOn: false
 };
+var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function isInstalled() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; }
+function pushSupported() { return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function b64uToBytes(v) {
+  var s = atob(v.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((v.length + 3) % 4));
+  return Uint8Array.from(s, function (c) { return c.charCodeAt(0); });
+}
+function bytesToB64u(buf) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 
 /* ---------- Helpers ---------- */
 function $(id) { return document.getElementById(id); }
@@ -113,6 +124,78 @@ function brand() { return esc((state.status && state.status.business_name) || "S
 function mark() { return '<div class="lockmark" aria-hidden="true"><i></i><i></i><i></i></div>'; }
 function errBox() { return state.err ? '<div class="err" role="alert">' + esc(state.err) + "</div>" : ""; }
 
+function installBar() {
+  if (isInstalled()) return "";
+  var label = state.installEvent ? "App install karein" : "App kaise install karein";
+  var help = "";
+  if (state.showInstallHelp) {
+    help = isIos
+      ? "<ol><li>Is link ko Safari mein kholiye.</li><li>Neeche Share button dabaiye.</li><li>Add to Home Screen chuniye, phir Add dabaiye.</li></ol>"
+      : "<ol><li>Is link ko Chrome mein kholiye. WhatsApp ke andar ho to upar ke menu se Open in Chrome chuniye.</li><li>Upar ke teen dots dabaiye.</li><li>Install app ya Add to Home screen chuniye.</li></ol>";
+  }
+  return '<div class="tip"><div class="row between"><span class="grow small">Phone par app ki tarah rakhiye, baar baar link nahi kholna padega.</span><button class="btn sm" type="button" data-act="install">' + label + "</button></div>" + help + "</div>";
+}
+function pushBar() {
+  var c = state.catalog;
+  if (!c || !c.push_public) return "";
+  if (state.pushOn) return '<div class="row between small"><span class="muted">Naye sample ki notification chalu hai.</span><button class="btn link sm" data-act="pushOff">Band karein</button></div>';
+  if (isIos && !isInstalled()) return '<div class="tip small">iPhone par notification ke liye pehle app install kijiye, phir usi app se yahan chalu kijiye.</div>';
+  if (!pushSupported()) return "";
+  if (Notification.permission === "denied") return '<div class="tip small">Notification band hai. Browser ya phone ki settings mein is site ki notification chalu kijiye.</div>';
+  return '<div class="tip"><div class="row between"><span class="grow small">Naya sample aate hi phone par pata chalega.</span><button class="btn sm" data-act="pushOn">Notification chalu karein</button></div></div>';
+}
+async function checkPush() {
+  state.pushOn = false;
+  if (!pushSupported() || Notification.permission !== "granted") return;
+  try {
+    var reg = await navigator.serviceWorker.getRegistration();
+    var sub = reg && await reg.pushManager.getSubscription();
+    if (sub) {
+      state.pushOn = true;
+      await rpc("sb_push_subscribe", { p_token: state.session.token, p_endpoint: sub.endpoint });
+    }
+  } catch (e) { if (e.message === "SESSION_END") throw e; }
+}
+async function pushOn() {
+  var perm = await Notification.requestPermission();
+  if (perm !== "granted") { render(); toast("Notification ki permission nahi mili."); return; }
+  var reg = await navigator.serviceWorker.ready;
+  var sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(state.catalog.push_public) });
+  await rpc("sb_push_subscribe", { p_token: state.session.token, p_endpoint: sub.endpoint });
+  state.pushOn = true; render(); toast("Notification chalu ho gayi");
+}
+async function pushOff() {
+  var reg = await navigator.serviceWorker.getRegistration();
+  var sub = reg && await reg.pushManager.getSubscription();
+  if (sub) {
+    await rpc("sb_push_unsubscribe", { p_token: state.session.token, p_endpoint: sub.endpoint });
+    await sub.unsubscribe();
+  }
+  state.pushOn = false;
+}
+async function ensurePushKeys() {
+  if (!state.admin || state.admin.settings.push_public || !window.crypto || !crypto.subtle) return;
+  try {
+    var pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    var pub = await crypto.subtle.exportKey("raw", pair.publicKey);
+    var priv = await crypto.subtle.exportKey("jwk", pair.privateKey);
+    await rpc("sb_save_push_keys", { p_token: state.session.token, p_public: bytesToB64u(pub), p_private: JSON.stringify(priv) });
+    await loadAdmin();
+  } catch (e) {}
+}
+async function notifyItem(id) {
+  try {
+    var r = await fetch(API + "/functions/v1/notify", {
+      method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ token: state.session.token, item_id: id })
+    });
+    var j = await r.json();
+    if (!r.ok || !j.ok) return "Sample save ho gaya, par notification nahi gayi.";
+    if (j.sent) return "Sample save ho gaya. " + j.sent + " phone par notification gayi.";
+    return j.failed ? "Sample save ho gaya, par notification nahi gayi." : "Sample save ho gaya. Abhi kisi aise customer ne notification chalu nahi ki.";
+  } catch (e) { return "Sample save ho gaya, par notification nahi gayi."; }
+}
+
 function vNeedConfig() {
   return '<div class="stack loginwrap">' + mark() + "<h1>Setup baaki hai</h1><p>config.js file mein Supabase ka Project URL aur Publishable key daaliye. Poora tarika PADHO-PEHLE.txt mein likha hai.</p></div>";
 }
@@ -139,7 +222,7 @@ function vLogin() {
   return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number aur PIN daaliye.</p>' + errBox() +
     '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="username"></div>' +
     '<div class="field"><label for="lp">PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' +
-    '<button class="btn" type="submit">Login karein</button><p class="muted small">PIN nahi hai? Apne dalal se maangiye.</p></form>';
+    '<button class="btn" type="submit">Login karein</button><p class="muted small">PIN nahi hai? Apne dalal se maangiye.</p>' + installBar() + "</form>";
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -150,6 +233,7 @@ function vCatalog() {
   var chips = cats.length ? '<div class="chips"><button class="chip" data-act="cat" data-c="" aria-pressed="' + (!state.cat) + '">Sab</button>' +
     cats.map(function (x) { return '<button class="chip" data-act="cat" data-c="' + esc(x) + '" aria-pressed="' + (state.cat === x) + '">' + esc(x) + "</button>"; }).join("") + "</div>" : "";
   return '<div class="stack">' + head(c.me.name, c.business_name + ": aapke liye " + n + " sample") +
+    installBar() + pushBar() +
     (n ? '<div class="field"><label for="q">Naam ya code se dhoondiye</label><input id="q" type="search" value="' + esc(state.q) + '"></div>' + chips : "") +
     '<div id="grid"></div><div><button class="btn link sm" data-act="reloadCat">Naye sample dekhein</button></div></div>';
 }
@@ -199,7 +283,7 @@ function vAdmin() {
   } else if (t === "customers") {
     body = '<div><button class="btn" data-act="newCust">Naya customer jodiye</button></div>' +
       (a.customers.length ? '<div class="list">' + a.customers.map(function (c) {
-        return '<div class="li"><div class="info"><div class="name">' + esc(c.name) + '</div><div class="row small"><span class="num">' + esc(c.mobile) + '</span><span class="pill ' + (c.active ? "good" : "bad") + '">' + (c.active ? "Login chalu" : "Login band") + '</span></div><div class="muted small">' + c.visible_count + " sample dikhte hain. Aakhri login: " + esc(dateText(c.last_login)) +
+        return '<div class="li"><div class="info"><div class="name">' + esc(c.name) + '</div><div class="row small"><span class="num">' + esc(c.mobile) + '</span><span class="pill ' + (c.active ? "good" : "bad") + '">' + (c.active ? "Login chalu" : "Login band") + "</span>" + (c.push_count ? '<span class="pill">Notification chalu</span>' : "") + '</div><div class="muted small">' + c.visible_count + " sample dikhte hain. Aakhri login: " + esc(dateText(c.last_login)) +
           '</div></div><div class="acts"><button class="btn ghost sm" data-act="toggleCust" data-id="' + esc(c.id) + '" data-on="' + (!c.active) + '">' + (c.active ? "Login band karein" : "Login chalu karein") + '</button><button class="btn ghost sm" data-act="resetPin" data-id="' + esc(c.id) + '">Naya PIN</button>' + confirmBtn("dc" + c.id, "delCust", c.id, "Hataiye") + "</div></div>";
       }).join("") + "</div>" : '<p class="muted">Abhi koi customer nahi hai. Customer jodne par PIN banega, jise WhatsApp par bhej sakte hain.</p>');
   } else {
@@ -237,6 +321,7 @@ function vItemForm() {
     ((d.videoFile || (d.video_url && !d.remove_video)) ? '<div><button type="button" class="btn link sm" data-act="rmVideo">Video hataiye</button></div>' : "") + "</div>" +
     "<fieldset><legend>Kaun dekh sakta hai</legend>" + radio("all", "Sabhi customers") + radio("some", "Sirf chune hue customers") + radio("none", "Kisi ko nahi (chhupa dijiye)") +
     '<div id="alBox" class="stack tight" style="padding-left:28px"' + (d.access === "some" ? "" : " hidden") + ">" + (custs || '<span class="muted small">Pehle customer jodiye.</span>') + "</div></fieldset>" +
+    '<label class="check"><input id="fnotify" type="checkbox"' + (d.notify ? " checked" : "") + '>Customers ko notification bhejiye</label>' +
     '<div id="prog" class="stack tight" hidden><span id="progText" class="small"></span><progress id="progBar" max="1" value="0"></progress></div>' +
     '<button id="itemSave" class="btn" type="submit">Sample save karein</button></form>';
 }
@@ -249,7 +334,7 @@ function vCustForm() {
     '<button class="btn" type="submit">Customer save karein</button></form>';
 }
 function shareText(s) {
-  return "Namaste " + s.name + ",\n" + ((state.status && state.status.business_name) || "Sample Book") + " ke sample dekhne ke liye ye link kholiye:\n" + appUrl() + "\n\nMobile: " + s.mobile + "\nPIN: " + s.pin + "\n\nApna PIN kisi aur ko mat dijiye.";
+  return "Namaste " + s.name + ",\n" + ((state.status && state.status.business_name) || "Sample Book") + " ke sample dekhne ke liye ye link kholiye:\n" + appUrl() + "\n\nMobile: " + s.mobile + "\nPIN: " + s.pin + "\n\nLogin ke baad App install aur Notification chalu kar lijiye, taaki naya sample aate hi pata chale.\nApna PIN kisi aur ko mat dijiye.";
 }
 function vShare() {
   var s = state.share, text = shareText(s);
@@ -273,7 +358,13 @@ document.addEventListener("click", async function (e) {
   var a = b.dataset.act, id = b.dataset.id;
   try {
     if (a === "retry") { start(); }
-    else if (a === "logout") { var t = state.session && state.session.token; endSession(""); if (t) rpc("sb_logout", { p_token: t }).catch(function () {}); }
+    else if (a === "install") {
+      if (state.installEvent) { var ev = state.installEvent; state.installEvent = null; ev.prompt(); await ev.userChoice; render(); }
+      else { state.showInstallHelp = !state.showInstallHelp; render(); }
+    }
+    else if (a === "pushOn") { b.disabled = true; await pushOn(); }
+    else if (a === "pushOff") { b.disabled = true; await pushOff(); render(); toast("Notification band ho gayi"); }
+    else if (a === "logout") { if (state.pushOn) { try { await pushOff(); } catch (x) {} } var t = state.session && state.session.token; endSession(""); if (t) rpc("sb_logout", { p_token: t }).catch(function () {}); }
     else if (a === "cat") { state.cat = b.dataset.c; render(); }
     else if (a === "open") { state.itemId = id; go("detail"); }
     else if (a === "back") { go("catalog"); }
@@ -282,10 +373,10 @@ document.addEventListener("click", async function (e) {
     else if (a === "ask") { state.confirmKey = b.dataset.k; render(); }
     else if (a === "toItems") { state.tab = "items"; go("admin"); }
     else if (a === "toCustomers") { state.tab = "customers"; state.share = null; await loadAdmin(); go("admin"); }
-    else if (a === "newItem") { state.draft = { id: null, name: "", rate: "", unit: "kg", category: "", description: "", access: "all", allowed: [] }; go("itemForm"); }
+    else if (a === "newItem") { state.draft = { id: null, name: "", rate: "", unit: "kg", category: "", description: "", access: "all", allowed: [], notify: true }; go("itemForm"); }
     else if (a === "editItem") {
       var it = state.admin.items.filter(function (i) { return i.id === id; })[0];
-      state.draft = Object.assign({}, it, { allowed: it.allowed.slice() }); go("itemForm");
+      state.draft = Object.assign({}, it, { allowed: it.allowed.slice(), notify: false }); go("itemForm");
     }
     else if (a === "rmVideo") { syncDraft(); state.draft.videoFile = null; state.draft.uploadedVideo = null; state.draft.remove_video = !!state.draft.video_url; render(); }
     else if (a === "delItem") {
@@ -322,7 +413,7 @@ document.addEventListener("click", async function (e) {
 document.addEventListener("input", function (e) { if (e.target.id === "q") { state.q = e.target.value; paintGrid(); } });
 function syncDraft() {
   var d = state.draft; if (!d || !$("fn")) return;
-  d.name = $("fn").value; d.rate = $("fr").value; d.unit = $("fu").value; d.category = $("fc").value; d.description = $("fd").value;
+  d.notify = $("fnotify").checked; d.name = $("fn").value; d.rate = $("fr").value; d.unit = $("fu").value; d.category = $("fc").value; d.description = $("fd").value;
   var r = document.querySelector("input[name=acc]:checked"); d.access = r ? r.value : "all";
   d.allowed = [].slice.call(document.querySelectorAll("input[name=al]:checked")).map(function (x) { return x.value; });
 }
@@ -372,8 +463,8 @@ async function doLogin(m, p) {
 }
 async function submitLogin() { await doLogin(digits($("lm").value), $("lp").value.trim()); }
 async function openHome() {
-  if (state.session.role === "admin") { await loadAdmin(); state.tab = "items"; go("admin"); }
-  else { await loadCatalog(); go("catalog"); }
+  if (state.session.role === "admin") { await loadAdmin(); await ensurePushKeys(); state.tab = "items"; go("admin"); }
+  else { await loadCatalog(); await checkPush(); go("catalog"); }
 }
 async function submitItem() {
   syncDraft();
@@ -396,8 +487,11 @@ async function submitItem() {
   } else if (d.uploadedVideo) { payload.video = d.uploadedVideo; }
   txt.textContent = "Save ho raha hai…";
   var r = await rpc("sb_save_item", { p_token: state.session.token, p_item: payload });
-  await cleanup(r.cleanup); await loadAdmin();
-  state.tab = "items"; state.draft = null; go("admin"); toast("Sample save ho gaya");
+  await cleanup(r.cleanup);
+  var doneMsg = "Sample save ho gaya";
+  if (d.notify && d.access !== "none") { txt.textContent = "Notification ja rahi hai…"; doneMsg = await notifyItem(r.id); }
+  await loadAdmin();
+  state.tab = "items"; state.draft = null; go("admin"); toast(doneMsg);
 }
 async function submitCustomer() {
   var d = { name: $("cn").value.trim(), mobile: digits($("cm").value), pin: $("cp").value.trim() }; state.custDraft = d;
@@ -426,7 +520,17 @@ async function start() {
   try { await openHome(); }
   catch (e) { if (e.message !== "SESSION_END") { state.err = friendly(e); state.view = "offline"; render(); } }
 }
-if ("serviceWorker" in navigator && location.protocol === "https:") {
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
+  navigator.serviceWorker.addEventListener("message", function (e) {
+    if (e.data === "refresh" && state.session && state.session.role === "customer") loadCatalog().then(function () { if (state.view === "catalog") render(); }).catch(function () {});
+  });
 }
+window.addEventListener("beforeinstallprompt", function (e) {
+  e.preventDefault(); state.installEvent = e;
+  if (state.view === "login" || state.view === "catalog") render();
+});
+window.addEventListener("appinstalled", function () {
+  state.installEvent = null; if (state.view === "login" || state.view === "catalog") render();
+});
 start();
