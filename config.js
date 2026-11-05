@@ -5,5 +5,5 @@
 //  Cloudinary ka API Secret ya Supabase ki secret key yahan KABHI mat daaliye.
 // =============================================================
 
-var SUPABASE_URL = "YAHAN_PROJECT_URL";
-var SUPABASE_KEY = "YAHAN_PUBLISHABLE_KEY";
+var SUPABASE_URL = "https://qosnqaikfwmunihkfxvf.supabase.co";
+var SUPABASE_KEY = "sb_publishable_-jLsqOteovsXmn0IEubMyg_BfYpvYuJ";
