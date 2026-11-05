@@ -144,11 +144,6 @@ function vLogin() {
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
 }
-function wm(me) {
-  var t = esc(me.name + " · " + me.mobile), h = "";
-  for (var i = 0; i < 5; i++) h += "<span>" + t + "</span>";
-  return '<div class="wm" aria-hidden="true">' + h + "</div>";
-}
 function vCatalog() {
   var c = state.catalog, n = c.items.length;
   var cats = c.items.map(function (i) { return i.category; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).sort();
@@ -169,7 +164,7 @@ function paintGrid() {
   }
   g.className = "grid";
   g.innerHTML = list.map(function (i) {
-    return '<button class="card" data-act="open" data-id="' + esc(i.id) + '"><div class="swatch"><img alt="" loading="lazy" src="' + esc(i.thumb_url) + '">' + wm(c.me) + (i.video_url ? '<span class="vidtag">Video</span>' : "") +
+    return '<button class="card" data-act="open" data-id="' + esc(i.id) + '"><div class="swatch"><img alt="" loading="lazy" src="' + esc(i.thumb_url) + '">' + (i.video_url ? '<span class="vidtag">Video</span>' : "") +
       '</div><span class="code">' + esc(i.code) + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span></button>";
   }).join("");
 }
@@ -177,11 +172,11 @@ function vDetail() {
   var c = state.catalog, i = c.items.filter(function (x) { return x.id === state.itemId; })[0];
   if (!i) return '<div class="stack"><p>Ye sample ab aapke liye nahi hai.</p><div><button class="btn" data-act="back">Wapas jaiye</button></div></div>';
   return '<div class="stack"><div><button class="btn link" data-act="back">← Saare sample</button></div><div class="detail"><div class="stack">' +
-    '<div class="swatch full" style="--z:22px"><img alt="' + esc(i.name) + '" src="' + esc(i.photo_url) + '">' + wm(c.me) + "</div>" +
-    (i.video_url ? '<div class="media"><video controls playsinline preload="metadata" controlslist="nodownload" poster="' + esc(i.thumb_url) + '" src="' + esc(i.video_url) + '"></video>' + wm(c.me) + "</div>" : "") +
+    '<div class="swatch full" style="--z:22px"><img alt="' + esc(i.name) + '" src="' + esc(i.photo_url) + '"></div>' +
+    (i.video_url ? '<div class="media"><video controls playsinline preload="metadata" controlslist="nodownload" poster="' + esc(i.thumb_url) + '" src="' + esc(i.video_url) + '"></video></div>' : "") +
     '</div><div class="stack tight"><span class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + "</span><h1>" + esc(i.name) + '</h1><p class="bigrate">' + rs(i.rate) + ' <span class="rate"><small>/ ' + esc(i.unit) + "</small></span></p>" +
     (i.description ? "<p>" + esc(i.description) + "</p>" : "") +
-    '<p class="muted small">Photo aur video par aapka naam aur number dikhta hai.</p></div></div></div>';
+    "</div></div></div>";
 }
 function accessPill(i) {
   if (i.access === "all") return '<span class="pill good">Sabhi customers</span>';
