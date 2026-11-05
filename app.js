@@ -10,7 +10,7 @@ var state = {
   status: null, session: null, view: "loading", err: "", confirmKey: null,
   catalog: null, q: "", cat: "", itemId: null,
   admin: null, tab: "items", draft: null, custDraft: null, share: null, busy: false,
-  installEvent: null, showInstallHelp: false, pushOn: false
+  needPin: false, loginMobile: "", installEvent: null, showInstallHelp: false, pushOn: false
 };
 var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 function isInstalled() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; }
@@ -36,10 +36,6 @@ var toastTimer;
 function toast(m) {
   var t = $("toast"); t.textContent = m; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3600);
-}
-function newPin() {
-  var a = new Uint32Array(1); crypto.getRandomValues(a);
-  return String(100000 + (a[0] % 900000));
 }
 function appUrl() { return location.origin + location.pathname; }
 function loadSession() { try { return JSON.parse(localStorage.getItem("sb_session")); } catch (e) { return null; } }
@@ -219,10 +215,10 @@ function vFirstSetup() {
     '<button class="btn" type="submit">Setup poora karein</button></form>';
 }
 function vLogin() {
-  return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number aur PIN daaliye.</p>' + errBox() +
-    '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="username"></div>' +
-    '<div class="field"><label for="lp">PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' +
-    '<button class="btn" type="submit">Login karein</button><p class="muted small">PIN nahi hai? Apne dalal se maangiye.</p>' + installBar() + "</form>";
+  return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number daaliye.</p>' + errBox() +
+    '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(state.loginMobile) + '"></div>' +
+    (state.needPin ? '<div class="field"><label for="lp">Admin PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' : "") +
+    '<button class="btn" type="submit">Login karein</button>' + installBar() + "</form>";
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -284,8 +280,8 @@ function vAdmin() {
     body = '<div><button class="btn" data-act="newCust">Naya customer jodiye</button></div>' +
       (a.customers.length ? '<div class="list">' + a.customers.map(function (c) {
         return '<div class="li"><div class="info"><div class="name">' + esc(c.name) + '</div><div class="row small"><span class="num">' + esc(c.mobile) + '</span><span class="pill ' + (c.active ? "good" : "bad") + '">' + (c.active ? "Login chalu" : "Login band") + "</span>" + (c.push_count ? '<span class="pill">Notification chalu</span>' : "") + '</div><div class="muted small">' + c.visible_count + " sample dikhte hain. Aakhri login: " + esc(dateText(c.last_login)) +
-          '</div></div><div class="acts"><button class="btn ghost sm" data-act="toggleCust" data-id="' + esc(c.id) + '" data-on="' + (!c.active) + '">' + (c.active ? "Login band karein" : "Login chalu karein") + '</button><button class="btn ghost sm" data-act="resetPin" data-id="' + esc(c.id) + '">Naya PIN</button>' + confirmBtn("dc" + c.id, "delCust", c.id, "Hataiye") + "</div></div>";
-      }).join("") + "</div>" : '<p class="muted">Abhi koi customer nahi hai. Customer jodne par PIN banega, jise WhatsApp par bhej sakte hain.</p>');
+          '</div></div><div class="acts"><button class="btn ghost sm" data-act="toggleCust" data-id="' + esc(c.id) + '" data-on="' + (!c.active) + '">' + (c.active ? "Login band karein" : "Login chalu karein") + '</button>' + confirmBtn("dc" + c.id, "delCust", c.id, "Hataiye") + "</div></div>";
+      }).join("") + "</div>" : '<p class="muted">Abhi koi customer nahi hai. Customer jodne ke baad use WhatsApp par link bhej sakte hain.</p>');
   } else {
     var s = a.settings;
     body = '<form id="settingsForm" class="stack form" novalidate><h2>Business aur Cloudinary</h2>' + errBox() +
@@ -330,15 +326,14 @@ function vCustForm() {
   return '<form id="custForm" class="stack form" novalidate><div><button type="button" class="btn link" data-act="toCustomers">← Wapas</button></div><h1>Naya customer</h1>' + errBox() +
     '<div class="field"><label for="cn">Customer ya firm ka naam</label><input id="cn" type="text" value="' + esc(d.name) + '"></div>' +
     '<div class="field"><label for="cm">Mobile number (10 ank)</label><input id="cm" type="tel" inputmode="numeric" value="' + esc(d.mobile) + '"></div>' +
-    '<div class="field"><label for="cp">PIN (6 ank)</label><input id="cp" type="text" inputmode="numeric" value="' + esc(d.pin) + '"><span class="muted small">Ye PIN sirf abhi dikhega. Baad mein Naya PIN bana sakte hain.</span></div>' +
     '<button class="btn" type="submit">Customer save karein</button></form>';
 }
 function shareText(s) {
-  return "Namaste " + s.name + ",\n" + ((state.status && state.status.business_name) || "Sample Book") + " ke sample dekhne ke liye ye link kholiye:\n" + appUrl() + "\n\nMobile: " + s.mobile + "\nPIN: " + s.pin + "\n\nLogin ke baad App install aur Notification chalu kar lijiye, taaki naya sample aate hi pata chale.\nApna PIN kisi aur ko mat dijiye.";
+  return "Namaste " + s.name + ",\n" + ((state.status && state.status.business_name) || "Sample Book") + " ke sample dekhne ke liye ye link kholiye:\n" + appUrl() + "\n\nLogin ke liye apna ye mobile number daaliye: " + s.mobile + "\n\nLogin ke baad App install aur Notification chalu kar lijiye, taaki naya sample aate hi pata chale.";
 }
 function vShare() {
   var s = state.share, text = shareText(s);
-  return '<div class="stack form"><div class="okbox">' + esc(s.name) + " ka login taiyar hai.</div><h1>Customer ko bhejiye</h1><p class=\"muted\">Ye PIN dobara nahi dikhega.</p>" +
+  return '<div class="stack form"><div class="okbox">' + esc(s.name) + " ka login taiyar hai.</div><h1>Customer ko bhejiye</h1>" +
     '<div id="shareMsg" class="msgbox">' + esc(text) + '</div><div class="row"><a class="btn" target="_blank" rel="noopener" href="https://wa.me/91' + esc(s.mobile) + "?text=" + encodeURIComponent(text) + '">WhatsApp par bhejiye</a><button class="btn ghost" data-act="copyShare">Message copy karein</button></div>' +
     '<div><button class="btn link" data-act="toCustomers">Customers par wapas</button></div></div>';
 }
@@ -384,17 +379,11 @@ document.addEventListener("click", async function (e) {
       var r = await rpc("sb_delete_item", { p_token: state.session.token, p_id: id });
       await cleanup(r.cleanup); await loadAdmin(); state.confirmKey = null; render(); toast("Sample hata diya");
     }
-    else if (a === "newCust") { state.custDraft = { name: "", mobile: "", pin: newPin() }; go("custForm"); }
+    else if (a === "newCust") { state.custDraft = { name: "", mobile: "" }; go("custForm"); }
     else if (a === "toggleCust") {
       b.disabled = true;
       await rpc("sb_set_active", { p_token: state.session.token, p_id: id, p_active: b.dataset.on === "true" });
       await loadAdmin(); state.confirmKey = null; render(); toast(b.dataset.on === "true" ? "Login chalu kar diya" : "Login band kar diya. Customer ab andar nahi ja sakta.");
-    }
-    else if (a === "resetPin") {
-      b.disabled = true;
-      var c = state.admin.customers.filter(function (x) { return x.id === id; })[0], pin = newPin();
-      await rpc("sb_reset_pin", { p_token: state.session.token, p_id: id, p_pin: pin });
-      state.share = { name: c.name, mobile: c.mobile, pin: pin }; go("share");
     }
     else if (a === "delCust") {
       b.disabled = true;
@@ -457,11 +446,20 @@ async function submitSetup() {
 }
 async function doLogin(m, p) {
   var r = await rpc("sb_login", { p_mobile: m, p_pin: p });
-  if (!r.ok) { state.err = r.error; state.view = "login"; render(); return; }
+  if (!r.ok) {
+    state.needPin = !!r.need_pin; state.err = r.error || ""; state.view = "login"; render();
+    if (r.need_pin && $("lp")) $("lp").focus();
+    return;
+  }
+  state.needPin = false; state.loginMobile = "";
   state.session = { token: r.token, role: r.role, name: r.name, mobile: r.mobile }; saveSession(state.session);
   await openHome();
 }
-async function submitLogin() { await doLogin(digits($("lm").value), $("lp").value.trim()); }
+async function submitLogin() {
+  state.loginMobile = digits($("lm").value);
+  if (state.loginMobile.length !== 10) { state.err = "Mobile number 10 ank ka likhiye."; render(); return; }
+  await doLogin(state.loginMobile, $("lp") ? $("lp").value.trim() : "");
+}
 async function openHome() {
   if (state.session.role === "admin") { await loadAdmin(); await ensurePushKeys(); state.tab = "items"; go("admin"); }
   else { await loadCatalog(); await checkPush(); go("catalog"); }
@@ -494,8 +492,8 @@ async function submitItem() {
   state.tab = "items"; state.draft = null; go("admin"); toast(doneMsg);
 }
 async function submitCustomer() {
-  var d = { name: $("cn").value.trim(), mobile: digits($("cm").value), pin: $("cp").value.trim() }; state.custDraft = d;
-  await rpc("sb_add_customer", { p_token: state.session.token, p_name: d.name, p_mobile: d.mobile, p_pin: d.pin });
+  var d = { name: $("cn").value.trim(), mobile: digits($("cm").value) }; state.custDraft = d;
+  await rpc("sb_add_customer", { p_token: state.session.token, p_name: d.name, p_mobile: d.mobile });
   await loadAdmin(); state.share = d; go("share");
 }
 async function submitSettings() {
