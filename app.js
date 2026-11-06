@@ -63,7 +63,28 @@ async function rpc(fn, args) {
   }
   return j;
 }
+function swStore(key, value) {
+  /* Notification aane par service worker isi se item ki jaankari laata hai */
+  return new Promise(function (ok) {
+    try {
+      var open = indexedDB.open("sample-book", 1);
+      open.onupgradeneeded = function () { open.result.createObjectStore("kv"); };
+      open.onerror = function () { ok(); };
+      open.onsuccess = function () {
+        var tx = open.result.transaction("kv", "readwrite"), st = tx.objectStore("kv");
+        if (value == null) st.delete(key); else st.put(value, key);
+        tx.oncomplete = tx.onerror = function () { open.result.close(); ok(); };
+      };
+    } catch (e) { ok(); }
+  });
+}
+function openFromLink() {
+  var m = /^#item-([0-9a-f-]+)$/.exec(location.hash);
+  if (m && history.replaceState) history.replaceState(null, "", location.pathname);
+  return m ? m[1] : null;
+}
 function endSession(msg) {
+  swStore("token", null);
   state.session = null; state.catalog = null; state.admin = null; saveSession(null);
   state.err = msg || ""; state.view = "login"; render();
 }
@@ -462,7 +483,12 @@ async function submitLogin() {
 }
 async function openHome() {
   if (state.session.role === "admin") { await loadAdmin(); await ensurePushKeys(); state.tab = "items"; go("admin"); }
-  else { await loadCatalog(); await checkPush(); go("catalog"); }
+  else {
+    await loadCatalog(); await swStore("token", state.session.token); await checkPush();
+    var linked = openFromLink();
+    if (linked && state.catalog.items.some(function (i) { return i.id === linked; })) { state.itemId = linked; go("detail"); }
+    else go("catalog");
+  }
 }
 async function submitItem() {
   syncDraft();
@@ -521,7 +547,11 @@ async function start() {
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("sw.js").catch(function () {});
   navigator.serviceWorker.addEventListener("message", function (e) {
-    if (e.data === "refresh" && state.session && state.session.role === "customer") loadCatalog().then(function () { if (state.view === "catalog") render(); }).catch(function () {});
+    if (!e.data || !e.data.refresh || !state.session || state.session.role !== "customer") return;
+    loadCatalog().then(function () {
+      if (e.data.open && state.catalog.items.some(function (i) { return i.id === e.data.open; })) { state.itemId = e.data.open; go("detail"); }
+      else if (state.view === "catalog") render();
+    }).catch(function () {});
   });
 }
 window.addEventListener("beforeinstallprompt", function (e) {
