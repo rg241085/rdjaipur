@@ -239,7 +239,7 @@ function vLogin() {
   return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number daaliye.</p>' + errBox() +
     '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(state.loginMobile) + '"></div>' +
     (state.needPin ? '<div class="field"><label for="lp">Admin PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' : "") +
-    '<button class="btn" type="submit">Login karein</button>' + installBar() + "</form>";
+    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 6</p></form>';
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -317,7 +317,7 @@ function vAdmin() {
       '<div><button class="btn ghost" type="submit">PIN badliye</button></div></form>';
   }
   function tab(k, l) { return '<button role="tab" aria-selected="' + (t === k) + '" data-act="tab" data-t="' + k + '">' + l + "</button>"; }
-  return '<div class="stack">' + head("Admin page", a.items.length + " sample, " + a.customers.filter(function (c) { return c.active; }).length + " customers ka login chalu") +
+  return '<div class="stack">' + head("Admin page", "Version 6 · " + a.items.length + " sample, " + a.customers.filter(function (c) { return c.active; }).length + " customers ka login chalu") +
     '<div class="tabs" role="tablist">' + tab("items", "Samples") + tab("customers", "Customers") + tab("settings", "Settings") + "</div>" + body + "</div>";
 }
 function vItemForm() {
