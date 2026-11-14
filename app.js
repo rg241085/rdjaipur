@@ -241,7 +241,7 @@ function vLogin() {
   return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number daaliye.</p>' + errBox() +
     '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(state.loginMobile) + '"></div>' +
     (state.needPin ? '<div class="field"><label for="lp">Admin PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' : "") +
-    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 8</p></form>';
+    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 9</p></form>';
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -268,7 +268,7 @@ function paintGrid() {
   g.className = "grid";
   g.innerHTML = list.map(function (i) {
     return '<button class="card" data-act="open" data-id="' + esc(i.id) + '"><div class="swatch"><img alt="" loading="lazy" src="' + esc(i.thumb_url) + '">' + (i.video_url ? '<span class="vidtag">Video</span>' : "") +
-      '</div><span class="code">' + esc(i.code) + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span>" + (qtyText(i) ? '<span class="qty">Maal: ' + esc(qtyText(i)) + "</span>" : "") + "</button>";
+      '</div><span class="code">' + esc(i.code) + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span>" + (qtyText(i) ? '<span class="qty">Only ' + esc(qtyText(i)) + "</span>" : "") + "</button>";
   }).join("");
 }
 function vDetail() {
@@ -278,7 +278,7 @@ function vDetail() {
     '<div class="swatch full" style="--z:22px"><img alt="' + esc(i.name) + '" src="' + esc(i.photo_url) + '"></div>' +
     (i.video_url ? '<div class="media"><video controls playsinline preload="metadata" controlslist="nodownload" poster="' + esc(i.thumb_url) + '" src="' + esc(i.video_url) + '"></video></div>' : "") +
     '</div><div class="stack tight"><span class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + "</span><h1>" + esc(i.name) + '</h1><p class="bigrate">' + rs(i.rate) + ' <span class="rate"><small>/ ' + esc(i.unit) + "</small></span></p>" +
-    (qtyText(i) ? '<p class="qty">Maal uplabdh: ' + esc(qtyText(i)) + "</p>" : "") +
+    (qtyText(i) ? '<p class="qty">Only ' + esc(qtyText(i)) + "</p>" : "") +
     (i.description ? "<p>" + esc(i.description) + "</p>" : "") +
     "</div></div></div>";
 }
@@ -297,7 +297,7 @@ function vAdmin() {
   if (t === "items") {
     body = '<div><button class="btn" data-act="newItem">Naya sample jodiye</button></div>' +
       (a.items.length ? '<div class="list">' + a.items.map(function (i) {
-        return '<div class="li"><img class="thumb" alt="" loading="lazy" src="' + esc(i.thumb_url) + '"><div class="info"><div class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + (i.video_url ? " · Video" : "") + '</div><div class="name">' + esc(i.name) + '</div><div class="row"><span class="num">' + rs(i.rate) + " / " + esc(i.unit) + "</span>" + (qtyText(i) ? '<span class="num">Maal: ' + esc(qtyText(i)) + "</span>" : "") + accessPill(i) +
+        return '<div class="li"><img class="thumb" alt="" loading="lazy" src="' + esc(i.thumb_url) + '"><div class="info"><div class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + (i.video_url ? " · Video" : "") + '</div><div class="name">' + esc(i.name) + '</div><div class="row"><span class="num">' + rs(i.rate) + " / " + esc(i.unit) + "</span>" + (qtyText(i) ? '<span class="num">Only ' + esc(qtyText(i)) + "</span>" : "") + accessPill(i) +
           '</div></div><div class="acts"><button class="btn sm" data-act="sendItem" data-id="' + esc(i.id) + '">Bhejiye</button><button class="btn ghost sm" data-act="editItem" data-id="' + esc(i.id) + '">Badliye</button>' + confirmBtn("di" + i.id, "delItem", i.id, "Hataiye") + "</div></div>";
       }).join("") + "</div>" : '<p class="muted">Abhi koi sample nahi hai. Pehla sample jodiye, phir wo aapke customers ko dikhega.</p>');
   } else if (t === "customers") {
@@ -348,7 +348,7 @@ function vItemForm() {
 }
 function itemMessage(i, withLink) {
   var lines = ["*" + i.name + "*", "Rate: " + rs(i.rate) + " / " + i.unit];
-  if (qtyText(i)) lines.push("Maal: " + qtyText(i));
+  if (qtyText(i)) lines.push("Only " + qtyText(i));
   if (i.description) lines.push(i.description);
   if (withLink) lines.push("", "Photo aur video yahan dekhiye:", appUrl() + "#item-" + i.id);
   return lines.join("\n");
@@ -359,7 +359,7 @@ function vSendItem() {
   if (!i) return '<div class="stack"><p>Ye sample ab nahi hai.</p><div><button class="btn" data-act="toItems">Wapas jaiye</button></div></div>';
   var custs = state.admin.customers.filter(function (c) { return c.active; });
   return '<div class="stack form"><div><button class="btn link" data-act="toItems">← Wapas</button></div>' +
-    '<div class="row"><img class="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:4px" alt="" src="' + esc(i.thumb_url) + '"><div class="grow"><div class="code">' + esc(i.code) + '</div><h2>' + esc(i.name) + '</h2><div class="num">' + rs(i.rate) + " / " + esc(i.unit) + (qtyText(i) ? " · Maal: " + esc(qtyText(i)) : "") + "</div></div></div>" +
+    '<div class="row"><img class="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:4px" alt="" src="' + esc(i.thumb_url) + '"><div class="grow"><div class="code">' + esc(i.code) + '</div><h2>' + esc(i.name) + '</h2><div class="num">' + rs(i.rate) + " / " + esc(i.unit) + (qtyText(i) ? " · Only " + esc(qtyText(i)) : "") + "</div></div></div>" +
     '<div class="tip"><b>Photo ya video seedha bhejiye</b><span class="small muted">Button dabane par phone share karne ka menu kholega. Usme WhatsApp aur phir customer chuniye. Saath mein naam aur rate ka message bhi jayega.</span>' +
     '<div class="row"><button class="btn sm" data-act="shareMedia" data-kind="photo">Photo bhejiye</button>' + (i.video_url ? '<button class="btn sm" data-act="shareMedia" data-kind="video">Video bhejiye</button>' : "") + "</div>" +
     '<div id="shareStatus" class="small muted"></div></div>' +

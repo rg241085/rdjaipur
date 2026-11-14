@@ -1,7 +1,7 @@
 // App ki files phone mein cache hoti hain taaki app jaldi khule.
 // Customer ka data, photo aur video kabhi yahan cache nahi hote.
 try { importScripts("config.js"); } catch (e) {}
-const CACHE = "sample-book-v8";
+const CACHE = "sample-book-v9";
 const SHELL = ["./", "./index.html", "./app.js", "./config.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" }))))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
@@ -44,7 +44,7 @@ async function pickNote() {
   const shown = (await kv("readonly", s => s.get("shown"))) || [];
   const it = items.find(x => shown.indexOf(x.id) < 0) || items[0];
   await kv("readwrite", s => s.put([it.id].concat(shown.filter(x => x !== it.id)).slice(0, 20), "shown"));
-  const qty = it.qty != null ? "Maal: " + Number(it.qty).toLocaleString("en-IN") + " " + it.qty_unit : "";
+  const qty = it.qty != null ? "Only " + Number(it.qty).toLocaleString("en-IN") + " " + it.qty_unit : "";
   const line = [money(it.rate) + " / " + it.unit, qty, it.category].filter(Boolean).join(" \u00B7 ");
   const desc = (it.description || "").slice(0, 100);
   return {
