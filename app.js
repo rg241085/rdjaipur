@@ -4,6 +4,7 @@
 var API = (typeof SUPABASE_URL === "string" ? SUPABASE_URL : "").replace(/\/+$/, "");
 var KEY = typeof SUPABASE_KEY === "string" ? SUPABASE_KEY : "";
 var MAX_PHOTO = 10 * 1048576, SHRINK_OVER = 8 * 1048576, MAX_VIDEO = 40 * 1048576;
+var QTY_UNITS = ["bag", "box", "kg", "katta", "carton", "packet", "piece", "quintal", "ton", "dozen"];
 var UNITS = ["kg", "gram", "quintal", "piece", "meter", "than", "set", "box", "dozen"];
 
 var state = {
@@ -31,6 +32,7 @@ function esc(s) {
   });
 }
 function digits(s) { return String(s || "").replace(/\D/g, ""); }
+function qtyText(i) { return i.qty != null && i.qty !== "" ? Number(i.qty).toLocaleString("en-IN") + " " + i.qty_unit : ""; }
 function rs(n) { return "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 }); }
 var toastTimer;
 function toast(m) {
@@ -239,7 +241,7 @@ function vLogin() {
   return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number daaliye.</p>' + errBox() +
     '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(state.loginMobile) + '"></div>' +
     (state.needPin ? '<div class="field"><label for="lp">Admin PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' : "") +
-    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 7</p></form>';
+    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 8</p></form>';
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -266,7 +268,7 @@ function paintGrid() {
   g.className = "grid";
   g.innerHTML = list.map(function (i) {
     return '<button class="card" data-act="open" data-id="' + esc(i.id) + '"><div class="swatch"><img alt="" loading="lazy" src="' + esc(i.thumb_url) + '">' + (i.video_url ? '<span class="vidtag">Video</span>' : "") +
-      '</div><span class="code">' + esc(i.code) + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span></button>";
+      '</div><span class="code">' + esc(i.code) + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span>" + (qtyText(i) ? '<span class="qty">Maal: ' + esc(qtyText(i)) + "</span>" : "") + "</button>";
   }).join("");
 }
 function vDetail() {
@@ -276,6 +278,7 @@ function vDetail() {
     '<div class="swatch full" style="--z:22px"><img alt="' + esc(i.name) + '" src="' + esc(i.photo_url) + '"></div>' +
     (i.video_url ? '<div class="media"><video controls playsinline preload="metadata" controlslist="nodownload" poster="' + esc(i.thumb_url) + '" src="' + esc(i.video_url) + '"></video></div>' : "") +
     '</div><div class="stack tight"><span class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + "</span><h1>" + esc(i.name) + '</h1><p class="bigrate">' + rs(i.rate) + ' <span class="rate"><small>/ ' + esc(i.unit) + "</small></span></p>" +
+    (qtyText(i) ? '<p class="qty">Maal uplabdh: ' + esc(qtyText(i)) + "</p>" : "") +
     (i.description ? "<p>" + esc(i.description) + "</p>" : "") +
     "</div></div></div>";
 }
@@ -294,8 +297,8 @@ function vAdmin() {
   if (t === "items") {
     body = '<div><button class="btn" data-act="newItem">Naya sample jodiye</button></div>' +
       (a.items.length ? '<div class="list">' + a.items.map(function (i) {
-        return '<div class="li"><img class="thumb" alt="" loading="lazy" src="' + esc(i.thumb_url) + '"><div class="info"><div class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + (i.video_url ? " · Video" : "") + '</div><div class="name">' + esc(i.name) + '</div><div class="row"><span class="num">' + rs(i.rate) + " / " + esc(i.unit) + "</span>" + accessPill(i) +
-          '</div></div><div class="acts"><button class="btn ghost sm" data-act="editItem" data-id="' + esc(i.id) + '">Badliye</button>' + confirmBtn("di" + i.id, "delItem", i.id, "Hataiye") + "</div></div>";
+        return '<div class="li"><img class="thumb" alt="" loading="lazy" src="' + esc(i.thumb_url) + '"><div class="info"><div class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + (i.video_url ? " · Video" : "") + '</div><div class="name">' + esc(i.name) + '</div><div class="row"><span class="num">' + rs(i.rate) + " / " + esc(i.unit) + "</span>" + (qtyText(i) ? '<span class="num">Maal: ' + esc(qtyText(i)) + "</span>" : "") + accessPill(i) +
+          '</div></div><div class="acts"><button class="btn sm" data-act="sendItem" data-id="' + esc(i.id) + '">Bhejiye</button><button class="btn ghost sm" data-act="editItem" data-id="' + esc(i.id) + '">Badliye</button>' + confirmBtn("di" + i.id, "delItem", i.id, "Hataiye") + "</div></div>";
       }).join("") + "</div>" : '<p class="muted">Abhi koi sample nahi hai. Pehla sample jodiye, phir wo aapke customers ko dikhega.</p>');
   } else if (t === "customers") {
     body = '<div><button class="btn" data-act="newCust">Naya customer jodiye</button></div>' +
@@ -331,6 +334,7 @@ function vItemForm() {
     '<div class="field"><label for="fn">Item ka naam</label><input id="fn" type="text" value="' + esc(d.name) + '"></div>' +
     '<div class="two"><div class="field"><label for="fr">Rate (₹)</label><input id="fr" type="number" min="0" step="0.01" inputmode="decimal" value="' + esc(d.rate) + '"></div><div class="field"><label for="fu">Kiske hisab se</label><select id="fu">' +
     units.map(function (u) { return "<option" + (d.unit === u ? " selected" : "") + ">" + esc(u) + "</option>"; }).join("") + "</select></div></div>" +
+    '<div class="two"><div class="field"><label for="fq">Kitna maal hai (chahein to)</label><input id="fq" type="number" min="0" step="any" inputmode="decimal" value="' + esc(d.qty == null ? "" : d.qty) + '"></div><div class="field"><label for="fqu">Kis mein</label><input id="fqu" type="text" list="qtylist" value="' + esc(d.qty_unit || "bag") + '"><datalist id="qtylist">' + QTY_UNITS.map(function (u) { return '<option value="' + u + '">'; }).join("") + "</datalist></div></div>" +
     '<div class="field"><label for="fc">Category (chahein to)</label><input id="fc" type="text" list="catlist" value="' + esc(d.category) + '"><datalist id="catlist">' + cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + "</datalist></div>" +
     '<div class="field"><label for="fd">Jankari (chahein to)</label><textarea id="fd" rows="2">' + esc(d.description) + "</textarea></div>" +
     '<div class="field"><label for="fp">Photo (10 MB tak)</label><div class="row"><img id="pv" class="preview" alt=""' + (previewSrc ? ' src="' + esc(previewSrc) + '"' : " hidden") + '><input id="fp" class="grow" type="file" accept="image/*"></div></div>' +
@@ -341,6 +345,50 @@ function vItemForm() {
     '<label class="check"><input id="fnotify" type="checkbox"' + (d.notify ? " checked" : "") + '>Customers ko notification bhejiye</label>' +
     '<div id="prog" class="stack tight" hidden><span id="progText" class="small"></span><progress id="progBar" max="1" value="0"></progress></div>' +
     '<button id="itemSave" class="btn" type="submit">Sample save karein</button></form>';
+}
+function itemMessage(i, withLink) {
+  var lines = ["*" + i.name + "*", "Rate: " + rs(i.rate) + " / " + i.unit];
+  if (qtyText(i)) lines.push("Maal: " + qtyText(i));
+  if (i.description) lines.push(i.description);
+  if (withLink) lines.push("", "Photo aur video yahan dekhiye:", appUrl() + "#item-" + i.id);
+  return lines.join("\n");
+}
+function canSee(c, i) { return i.access === "all" || (i.access === "some" && i.allowed.indexOf(c.id) >= 0); }
+function vSendItem() {
+  var i = state.admin.items.filter(function (x) { return x.id === state.itemId; })[0];
+  if (!i) return '<div class="stack"><p>Ye sample ab nahi hai.</p><div><button class="btn" data-act="toItems">Wapas jaiye</button></div></div>';
+  var custs = state.admin.customers.filter(function (c) { return c.active; });
+  return '<div class="stack form"><div><button class="btn link" data-act="toItems">← Wapas</button></div>' +
+    '<div class="row"><img class="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:4px" alt="" src="' + esc(i.thumb_url) + '"><div class="grow"><div class="code">' + esc(i.code) + '</div><h2>' + esc(i.name) + '</h2><div class="num">' + rs(i.rate) + " / " + esc(i.unit) + (qtyText(i) ? " · Maal: " + esc(qtyText(i)) : "") + "</div></div></div>" +
+    '<div class="tip"><b>Photo ya video seedha bhejiye</b><span class="small muted">Button dabane par phone share karne ka menu kholega. Usme WhatsApp aur phir customer chuniye. Saath mein naam aur rate ka message bhi jayega.</span>' +
+    '<div class="row"><button class="btn sm" data-act="shareMedia" data-kind="photo">Photo bhejiye</button>' + (i.video_url ? '<button class="btn sm" data-act="shareMedia" data-kind="video">Video bhejiye</button>' : "") + "</div>" +
+    '<div id="shareStatus" class="small muted"></div></div>' +
+    '<div class="stack tight"><h2>Ya customer ko app ka link bhejiye</h2><p class="small muted">Customer link kholkar seedha isi sample par pahunchega.</p>' +
+    (custs.length ? '<div class="list">' + custs.map(function (c) {
+      var ok = canSee(c, i);
+      return '<div class="li"><div class="info"><div class="name">' + esc(c.name) + '</div><div class="small num muted">' + esc(c.mobile) + (ok ? "" : ' · <span style="color:var(--bad)">Is customer ko ye sample app mein nahi dikhta</span>') + '</div></div><div class="acts"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/91' + esc(c.mobile) + "?text=" + encodeURIComponent(itemMessage(i, ok)) + '">WhatsApp</a></div></div>';
+    }).join("") + "</div>" : '<p class="muted small">Abhi koi chalu customer nahi hai.</p>') + "</div></div>";
+}
+async function shareMedia(kind, btn) {
+  var i = state.admin.items.filter(function (x) { return x.id === state.itemId; })[0];
+  var st = $("shareStatus"), url = kind === "video" ? i.video_url : i.photo_url;
+  st.textContent = kind === "video" ? "Video taiyar ho raha hai…" : "Photo taiyar ho rahi hai…";
+  var r = await fetch(url);
+  if (!r.ok) throw new Error("File nahi mili. Thodi der baad koshish karein.");
+  var blob = await r.blob();
+  var ext = kind === "video" ? "mp4" : "jpg";
+  var file = new File([blob], (i.code || "sample") + "." + ext, { type: kind === "video" ? "video/mp4" : "image/jpeg" });
+  var data = { files: [file], text: itemMessage(i, false) };
+  if (navigator.canShare && navigator.canShare(data)) {
+    st.textContent = "";
+    try { await navigator.share(data); }
+    catch (e) { if (e.name !== "AbortError") throw new Error("Share nahi ho paya. Phone se dobara koshish karein."); }
+    return;
+  }
+  /* Computer jaise jagah jahan share menu nahi hai: file download kar dete hain */
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  st.textContent = "Is device par share menu nahi hai, isliye file download ho gayi. Ab use WhatsApp par attach karke bhej dijiye.";
 }
 function vCustForm() {
   var d = state.custDraft;
@@ -360,7 +408,7 @@ function vShare() {
 }
 
 function render() {
-  var map = { loading: function () { return '<p class="muted">Khul raha hai…</p>'; }, needConfig: vNeedConfig, offline: vOffline, firstSetup: vFirstSetup, login: vLogin, catalog: vCatalog, detail: vDetail, admin: vAdmin, itemForm: vItemForm, custForm: vCustForm, share: vShare };
+  var map = { loading: function () { return '<p class="muted">Khul raha hai…</p>'; }, needConfig: vNeedConfig, offline: vOffline, firstSetup: vFirstSetup, login: vLogin, catalog: vCatalog, detail: vDetail, admin: vAdmin, itemForm: vItemForm, custForm: vCustForm, sendItem: vSendItem, share: vShare };
   $("root").innerHTML = map[state.view]();
   document.title = (state.status && state.status.business_name) || "Sample Book";
   if (state.view === "catalog") paintGrid();
@@ -369,7 +417,7 @@ function render() {
    taaki back dabane par app band hone ki jagah pichhla page khule. */
 var ignorePop = false;
 function isChild(view, tab) {
-  return view === "detail" || view === "itemForm" || view === "custForm" || view === "share" || (view === "admin" && tab !== "items");
+  return view === "detail" || view === "sendItem" || view === "itemForm" || view === "custForm" || view === "share" || (view === "admin" && tab !== "items");
 }
 function inChild() { return !!(history.state && history.state.sb); }
 function go(view) {
@@ -385,6 +433,7 @@ window.addEventListener("popstate", function () {
   if (ignorePop) { ignorePop = false; return; }
   var v = state.view;
   if (v === "detail") { state.view = "catalog"; }
+  else if (v === "sendItem") { state.view = "admin"; state.tab = "items"; }
   else if (v === "itemForm") { state.view = "admin"; state.tab = "items"; state.draft = null; }
   else if (v === "custForm" || v === "share") { state.view = "admin"; state.tab = "customers"; state.share = null; if (state.session) loadAdmin().then(render).catch(function () {}); }
   else if (v === "admin" && state.tab !== "items") { state.tab = "items"; }
@@ -423,16 +472,21 @@ document.addEventListener("click", async function (e) {
       state.view = "admin"; state.err = ""; state.confirmKey = null; render(); window.scrollTo(0, 0);
       try { history.pushState({ sb: 1 }, ""); } catch (e) {}
     }
-    else if (a === "newItem") { state.draft = { id: null, name: "", rate: "", unit: "kg", category: "", description: "", access: "all", allowed: [], notify: true }; go("itemForm"); }
+    else if (a === "newItem") { state.draft = { id: null, name: "", rate: "", unit: "kg", qty: "", qty_unit: "bag", category: "", description: "", access: "all", allowed: [], notify: true }; go("itemForm"); }
     else if (a === "editItem") {
       var it = state.admin.items.filter(function (i) { return i.id === id; })[0];
-      state.draft = Object.assign({}, it, { allowed: it.allowed.slice(), notify: false }); go("itemForm");
+      state.draft = Object.assign({}, it, { allowed: it.allowed.slice(), notify: false, qty: it.qty == null ? "" : it.qty, qty_unit: it.qty_unit || "bag" }); go("itemForm");
     }
     else if (a === "rmVideo") { syncDraft(); state.draft.videoFile = null; state.draft.uploadedVideo = null; state.draft.remove_video = !!state.draft.video_url; render(); }
     else if (a === "delItem") {
       b.disabled = true;
       var r = await rpc("sb_delete_item", { p_token: state.session.token, p_id: id });
       await cleanup(r.cleanup); await loadAdmin(); state.confirmKey = null; render(); toast("Sample hata diya");
+    }
+    else if (a === "sendItem") { state.itemId = id; go("sendItem"); }
+    else if (a === "shareMedia") {
+      b.disabled = true;
+      try { await shareMedia(b.dataset.kind, b); } finally { b.disabled = false; }
     }
     else if (a === "newCust") { state.custDraft = { name: "", mobile: "" }; go("custForm"); }
     else if (a === "toggleCust") {
@@ -457,7 +511,7 @@ document.addEventListener("click", async function (e) {
 document.addEventListener("input", function (e) { if (e.target.id === "q") { state.q = e.target.value; paintGrid(); } });
 function syncDraft() {
   var d = state.draft; if (!d || !$("fn")) return;
-  d.notify = $("fnotify").checked; d.name = $("fn").value; d.rate = $("fr").value; d.unit = $("fu").value; d.category = $("fc").value; d.description = $("fd").value;
+  d.notify = $("fnotify").checked; d.name = $("fn").value; d.rate = $("fr").value; d.unit = $("fu").value; d.qty = $("fq").value; d.qty_unit = $("fqu").value.trim(); d.category = $("fc").value; d.description = $("fd").value;
   var r = document.querySelector("input[name=acc]:checked"); d.access = r ? r.value : "all";
   d.allowed = [].slice.call(document.querySelectorAll("input[name=al]:checked")).map(function (x) { return x.value; });
 }
@@ -526,12 +580,12 @@ async function openHome() {
 }
 async function submitItem() {
   syncDraft();
-  var d = state.draft, err = !d.name.trim() ? "Item ka naam likhiye." : (d.rate === "" || Number(d.rate) < 0) ? "Rate sahi likhiye." : (!d.id && !d.photoFile && !d.uploadedPhoto) ? "Photo chuniye." : (d.access === "some" && !d.allowed.length) ? "Kam se kam ek customer chuniye." : "";
+  var d = state.draft, err = !d.name.trim() ? "Item ka naam likhiye." : (d.rate === "" || Number(d.rate) < 0) ? "Rate sahi likhiye." : (!d.id && !d.photoFile && !d.uploadedPhoto) ? "Photo chuniye." : (d.access === "some" && !d.allowed.length) ? "Kam se kam ek customer chuniye." : (d.qty !== "" && d.qty != null && (Number(d.qty) < 0 || isNaN(Number(d.qty)))) ? "Quantity sahi likhiye." : (d.qty !== "" && d.qty != null && !d.qty_unit) ? "Quantity kis mein hai, ye likhiye (jaise bag, box)." : "";
   if (err) { state.err = err; render(); window.scrollTo(0, 0); return; }
   var prog = $("prog"), bar = $("progBar"), txt = $("progText");
   function step(label) { return function (x) { txt.textContent = label + " " + Math.round(x * 100) + "%"; bar.value = x; }; }
   prog.hidden = false;
-  var payload = { id: d.id, name: d.name, rate: d.rate, unit: d.unit, category: d.category, description: d.description, access: d.access, allowed: d.allowed, remove_video: !!d.remove_video };
+  var payload = { id: d.id, name: d.name, rate: d.rate, unit: d.unit, qty: d.qty, qty_unit: d.qty_unit, category: d.category, description: d.description, access: d.access, allowed: d.allowed, remove_video: !!d.remove_video };
   if (d.photoFile) {
     step("Photo taiyar ho rahi hai")(0);
     var ph = await shrinkPhoto(d.photoFile);
