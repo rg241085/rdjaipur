@@ -365,7 +365,32 @@ function render() {
   document.title = (state.status && state.status.business_name) || "Sample Book";
   if (state.view === "catalog") paintGrid();
 }
-function go(view) { state.view = view; state.err = ""; state.confirmKey = null; render(); window.scrollTo(0, 0); }
+/* Phone ka back button: andar ke page par jaate waqt history mein ek kadam jodte hain,
+   taaki back dabane par app band hone ki jagah pichhla page khule. */
+var ignorePop = false;
+function isChild(view, tab) {
+  return view === "detail" || view === "itemForm" || view === "custForm" || view === "share" || (view === "admin" && tab !== "items");
+}
+function inChild() { return !!(history.state && history.state.sb); }
+function go(view) {
+  var child = isChild(view, state.tab);
+  if (child && !inChild()) { try { history.pushState({ sb: 1 }, ""); } catch (e) {} }
+  else if (!child && inChild()) { ignorePop = true; history.back(); }
+  state.view = view; state.err = ""; state.confirmKey = null; render(); window.scrollTo(0, 0);
+}
+function goBack(fallback) {
+  if (inChild()) history.back(); else fallback();
+}
+window.addEventListener("popstate", function () {
+  if (ignorePop) { ignorePop = false; return; }
+  var v = state.view;
+  if (v === "detail") { state.view = "catalog"; }
+  else if (v === "itemForm") { state.view = "admin"; state.tab = "items"; state.draft = null; }
+  else if (v === "custForm" || v === "share") { state.view = "admin"; state.tab = "customers"; state.share = null; if (state.session) loadAdmin().then(render).catch(function () {}); }
+  else if (v === "admin" && state.tab !== "items") { state.tab = "items"; }
+  else return;
+  state.err = ""; state.confirmKey = null; render(); window.scrollTo(0, 0);
+});
 function showErr(e) { if (e && e.message === "SESSION_END") return; state.err = friendly(e); render(); window.scrollTo(0, 0); }
 
 /* ---------- Clicks ---------- */
@@ -383,12 +408,21 @@ document.addEventListener("click", async function (e) {
     else if (a === "logout") { if (state.pushOn) { try { await pushOff(); } catch (x) {} } var t = state.session && state.session.token; endSession(""); if (t) rpc("sb_logout", { p_token: t }).catch(function () {}); }
     else if (a === "cat") { state.cat = b.dataset.c; render(); }
     else if (a === "open") { state.itemId = id; go("detail"); }
-    else if (a === "back") { go("catalog"); }
+    else if (a === "back") { goBack(function () { go("catalog"); }); }
     else if (a === "reloadCat") { b.disabled = true; await loadCatalog(); render(); toast("Sample list taaza ho gayi"); }
-    else if (a === "tab") { state.tab = b.dataset.t; go("admin"); }
+    else if (a === "tab") {
+      state.tab = b.dataset.t;
+      if (state.tab !== "items" && inChild()) { state.view = "admin"; state.err = ""; state.confirmKey = null; render(); }
+      else go("admin");
+    }
     else if (a === "ask") { state.confirmKey = b.dataset.k; render(); }
-    else if (a === "toItems") { state.tab = "items"; go("admin"); }
-    else if (a === "toCustomers") { state.tab = "customers"; state.share = null; await loadAdmin(); go("admin"); }
+    else if (a === "toItems") { goBack(function () { state.tab = "items"; go("admin"); }); }
+    else if (a === "toCustomers") {
+      if (inChild() && state.view !== "admin") { ignorePop = true; history.back(); }
+      state.tab = "customers"; state.share = null; await loadAdmin();
+      state.view = "admin"; state.err = ""; state.confirmKey = null; render(); window.scrollTo(0, 0);
+      try { history.pushState({ sb: 1 }, ""); } catch (e) {}
+    }
     else if (a === "newItem") { state.draft = { id: null, name: "", rate: "", unit: "kg", category: "", description: "", access: "all", allowed: [], notify: true }; go("itemForm"); }
     else if (a === "editItem") {
       var it = state.admin.items.filter(function (i) { return i.id === id; })[0];
