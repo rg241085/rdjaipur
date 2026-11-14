@@ -241,7 +241,7 @@ function vLogin() {
   return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number daaliye.</p>' + errBox() +
     '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(state.loginMobile) + '"></div>' +
     (state.needPin ? '<div class="field"><label for="lp">Admin PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' : "") +
-    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 9</p></form>';
+    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 10</p></form>';
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -268,7 +268,9 @@ function paintGrid() {
   g.className = "grid";
   g.innerHTML = list.map(function (i) {
     return '<button class="card" data-act="open" data-id="' + esc(i.id) + '"><div class="swatch"><img alt="" loading="lazy" src="' + esc(i.thumb_url) + '">' + (i.video_url ? '<span class="vidtag">Video</span>' : "") +
-      '</div><span class="code">' + esc(i.code) + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span>" + (qtyText(i) ? '<span class="qty">Only ' + esc(qtyText(i)) + "</span>" : "") + "</button>";
+      '</div><span class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + '</span><span class="name">' + esc(i.name) + '</span><span class="rate">' + rs(i.rate) + " <small>/ " + esc(i.unit) + "</small></span>" +
+      (qtyText(i) ? '<span class="stock">Only ' + esc(qtyText(i)) + "</span>" : "") +
+      (i.description ? '<span class="cdesc">' + esc(i.description) + "</span>" : "") + "</button>";
   }).join("");
 }
 function vDetail() {
@@ -277,9 +279,13 @@ function vDetail() {
   return '<div class="stack"><div><button class="btn link" data-act="back">← Saare sample</button></div><div class="detail"><div class="stack">' +
     '<div class="swatch full" style="--z:22px"><img alt="' + esc(i.name) + '" src="' + esc(i.photo_url) + '"></div>' +
     (i.video_url ? '<div class="media"><video controls playsinline preload="metadata" controlslist="nodownload" poster="' + esc(i.thumb_url) + '" src="' + esc(i.video_url) + '"></video></div>' : "") +
-    '</div><div class="stack tight"><span class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + "</span><h1>" + esc(i.name) + '</h1><p class="bigrate">' + rs(i.rate) + ' <span class="rate"><small>/ ' + esc(i.unit) + "</small></span></p>" +
-    (qtyText(i) ? '<p class="qty">Only ' + esc(qtyText(i)) + "</p>" : "") +
-    (i.description ? "<p>" + esc(i.description) + "</p>" : "") +
+    '</div><div class="stack"><div class="stack tight"><span class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + "</span><h1>" + esc(i.name) + '</h1></div>' +
+    '<div class="pricebox"><p class="bigrate">' + rs(i.rate) + ' <span class="rate"><small>/ ' + esc(i.unit) + "</small></span></p>" + (qtyText(i) ? '<span class="stock big">Only ' + esc(qtyText(i)) + " bacha hai</span>" : "") + "</div>" +
+    '<dl class="facts"><div><dt>Lot / Item</dt><dd>' + esc(i.name) + "</dd></div><div><dt>Rate</dt><dd>" + rs(i.rate) + " / " + esc(i.unit) + "</dd></div>" +
+    (qtyText(i) ? "<div><dt>Stock</dt><dd>" + esc(qtyText(i)) + "</dd></div>" : "") +
+    (i.category ? "<div><dt>Category</dt><dd>" + esc(i.category) + "</dd></div>" : "") +
+    "<div><dt>Code</dt><dd>" + esc(i.code) + "</dd></div></dl>" +
+    (i.description ? '<div class="note"><span class="lab">Jaankari</span><p>' + esc(i.description) + "</p></div>" : "") +
     "</div></div></div>";
 }
 function accessPill(i) {
