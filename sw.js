@@ -1,7 +1,7 @@
 // App ki files phone mein cache hoti hain taaki app jaldi khule.
 // Customer ka data, photo aur video kabhi yahan cache nahi hote.
 try { importScripts("config.js"); } catch (e) {}
-const CACHE = "sample-book-v10";
+const CACHE = "sample-book-v11";
 const SHELL = ["./", "./index.html", "./app.js", "./config.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" }))))); self.skipWaiting(); });
 self.addEventListener("activate", e => {

@@ -1,6 +1,7 @@
 "use strict";
 /* Sample Book: sirf server (Supabase) ke functions se baat karta hai. Yahan koi secret nahi rehta. */
 
+var APP_VERSION = 11;
 var API = (typeof SUPABASE_URL === "string" ? SUPABASE_URL : "").replace(/\/+$/, "");
 var KEY = typeof SUPABASE_KEY === "string" ? SUPABASE_KEY : "";
 var MAX_PHOTO = 10 * 1048576, SHRINK_OVER = 8 * 1048576, MAX_VIDEO = 40 * 1048576;
@@ -91,6 +92,31 @@ function endSession(msg) {
   state.err = msg || ""; state.view = "login"; render();
 }
 async function loadCatalog() { state.catalog = await rpc("sb_catalog", { p_token: state.session.token }); }
+/* Customer ka page apne aap taaza hota rehta hai: app khulte hi aur har 30 second par */
+var refreshing = false;
+async function softRefresh() {
+  if (refreshing || document.hidden || !state.session || state.session.role !== "customer") return;
+  if (state.view !== "catalog" && state.view !== "detail") return;
+  refreshing = true;
+  try {
+    var before = JSON.stringify(state.catalog && state.catalog.items);
+    var fresh = await rpc("sb_catalog", { p_token: state.session.token });
+    if (JSON.stringify(fresh.items) === before) return;
+    var oldItem = state.catalog && state.catalog.items.filter(function (x) { return x.id === state.itemId; })[0];
+    state.catalog = fresh;
+    if (state.view === "catalog") {
+      var sub = document.querySelector("#root h1 + p"); if (sub) sub.textContent = fresh.business_name + ": aapke liye " + fresh.items.length + " sample";
+      paintGrid();
+    } else if (state.view === "detail") {
+      var v = document.querySelector("video");
+      if (v && !v.paused) return;
+      var newItem = fresh.items.filter(function (x) { return x.id === state.itemId; })[0];
+      if (JSON.stringify(newItem) !== JSON.stringify(oldItem)) { var y = window.scrollY; render(); window.scrollTo(0, y); }
+    }
+  } catch (e) {} finally { refreshing = false; }
+}
+document.addEventListener("visibilitychange", function () { if (!document.hidden) softRefresh(); });
+setInterval(softRefresh, 30000);
 async function loadAdmin() { state.admin = await rpc("sb_admin_data", { p_token: state.session.token }); }
 
 /* ---------- Cloudinary upload ---------- */
@@ -241,7 +267,7 @@ function vLogin() {
   return '<form id="loginForm" class="stack loginwrap" novalidate>' + mark() + "<h1>" + brand() + '</h1><p class="muted">Sample dekhne ke liye apna mobile number daaliye.</p>' + errBox() +
     '<div class="field"><label for="lm">Mobile number</label><input id="lm" type="tel" inputmode="numeric" autocomplete="tel-national" value="' + esc(state.loginMobile) + '"></div>' +
     (state.needPin ? '<div class="field"><label for="lp">Admin PIN</label><input id="lp" type="password" inputmode="numeric" autocomplete="current-password"></div>' : "") +
-    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version 10</p></form>';
+    '<button class="btn" type="submit">Login karein</button>' + installBar() + '<p class="muted small">Version ' + APP_VERSION + '</p></form>';
 }
 function head(title, sub) {
   return '<div class="row between"><div class="grow"><h1>' + esc(title) + '</h1><p class="muted">' + esc(sub) + '</p></div><div class="row"><button class="btn ghost sm" data-act="logout">Bahar niklein</button></div></div>';
@@ -286,6 +312,9 @@ function vDetail() {
     (i.category ? "<div><dt>Category</dt><dd>" + esc(i.category) + "</dd></div>" : "") +
     "<div><dt>Code</dt><dd>" + esc(i.code) + "</dd></div></dl>" +
     (i.description ? '<div class="note"><span class="lab">Jaankari</span><p>' + esc(i.description) + "</p></div>" : "") +
+    '<div class="tip"><b>Apne client ko share kijiye</b><span class="small muted">Photo ya video WhatsApp par seedha chali jayegi, saath mein naam aur stock bhi.</span>' +
+    '<label class="check small"><input id="shareRate" type="checkbox">Rate bhi bhejein</label>' +
+    '<div class="row"><button class="btn sm" data-act="shareMedia" data-kind="photo">Photo share</button>' + (i.video_url ? '<button class="btn sm" data-act="shareMedia" data-kind="video">Video share</button>' : "") + '</div><div id="shareStatus" class="small muted"></div></div>' +
     "</div></div></div>";
 }
 function accessPill(i) {
@@ -295,7 +324,7 @@ function accessPill(i) {
 }
 function confirmBtn(key, act, id, label) {
   return state.confirmKey === key
-    ? '<button class="btn danger sm" data-act="' + act + '" data-id="' + esc(id) + '">Pakka ' + label + "</button>"
+    ? '<button class="btn danger sm" data-act="' + act + '" data-id="' + esc(id) + '">Haan, ' + label + "</button>"
     : '<button class="btn ghost sm" data-act="ask" data-k="' + key + '">' + label + "</button>";
 }
 function vAdmin() {
@@ -304,13 +333,13 @@ function vAdmin() {
     body = '<div><button class="btn" data-act="newItem">Naya sample jodiye</button></div>' +
       (a.items.length ? '<div class="list">' + a.items.map(function (i) {
         return '<div class="li"><img class="thumb" alt="" loading="lazy" src="' + esc(i.thumb_url) + '"><div class="info"><div class="code">' + esc(i.code) + (i.category ? " · " + esc(i.category) : "") + (i.video_url ? " · Video" : "") + '</div><div class="name">' + esc(i.name) + '</div><div class="row"><span class="num">' + rs(i.rate) + " / " + esc(i.unit) + "</span>" + (qtyText(i) ? '<span class="num">Only ' + esc(qtyText(i)) + "</span>" : "") + accessPill(i) +
-          '</div></div><div class="acts"><button class="btn sm" data-act="sendItem" data-id="' + esc(i.id) + '">Bhejiye</button><button class="btn ghost sm" data-act="editItem" data-id="' + esc(i.id) + '">Badliye</button>' + confirmBtn("di" + i.id, "delItem", i.id, "Hataiye") + "</div></div>";
+          '</div></div><div class="acts"><button class="btn sm" data-act="sendItem" data-id="' + esc(i.id) + '">Share</button><button class="btn ghost sm" data-act="editItem" data-id="' + esc(i.id) + '">Edit</button>' + confirmBtn("di" + i.id, "delItem", i.id, "Delete") + "</div></div>";
       }).join("") + "</div>" : '<p class="muted">Abhi koi sample nahi hai. Pehla sample jodiye, phir wo aapke customers ko dikhega.</p>');
   } else if (t === "customers") {
     body = '<div><button class="btn" data-act="newCust">Naya customer jodiye</button></div>' +
       (a.customers.length ? '<div class="list">' + a.customers.map(function (c) {
         return '<div class="li"><div class="info"><div class="name">' + esc(c.name) + '</div><div class="row small"><span class="num">' + esc(c.mobile) + '</span><span class="pill ' + (c.active ? "good" : "bad") + '">' + (c.active ? "Login chalu" : "Login band") + "</span>" + (c.push_count ? '<span class="pill">Notification chalu</span>' : "") + '</div><div class="muted small">' + c.visible_count + " sample dikhte hain. Aakhri login: " + esc(dateText(c.last_login)) +
-          '</div></div><div class="acts"><button class="btn ghost sm" data-act="toggleCust" data-id="' + esc(c.id) + '" data-on="' + (!c.active) + '">' + (c.active ? "Login band karein" : "Login chalu karein") + '</button>' + confirmBtn("dc" + c.id, "delCust", c.id, "Hataiye") + "</div></div>";
+          '</div></div><div class="acts"><button class="btn ghost sm" data-act="toggleCust" data-id="' + esc(c.id) + '" data-on="' + (!c.active) + '">' + (c.active ? "Block" : "Unblock") + '</button>' + confirmBtn("dc" + c.id, "delCust", c.id, "Delete") + "</div></div>";
       }).join("") + "</div>" : '<p class="muted">Abhi koi customer nahi hai. Customer jodne ke baad use WhatsApp par link bhej sakte hain.</p>');
   } else {
     var s = a.settings;
@@ -326,7 +355,7 @@ function vAdmin() {
       '<div><button class="btn ghost" type="submit">PIN badliye</button></div></form>';
   }
   function tab(k, l) { return '<button role="tab" aria-selected="' + (t === k) + '" data-act="tab" data-t="' + k + '">' + l + "</button>"; }
-  return '<div class="stack">' + head("Admin page", "Version 7 · " + a.items.length + " sample, " + a.customers.filter(function (c) { return c.active; }).length + " customers ka login chalu") +
+  return '<div class="stack">' + head("Admin page", "Version " + APP_VERSION + " · " + a.items.length + " sample, " + a.customers.filter(function (c) { return c.active; }).length + " customers ka login chalu") +
     '<div class="tabs" role="tablist">' + tab("items", "Samples") + tab("customers", "Customers") + tab("settings", "Settings") + "</div>" + body + "</div>";
 }
 function vItemForm() {
@@ -359,6 +388,14 @@ function itemMessage(i, withLink) {
   if (withLink) lines.push("", "Photo aur video yahan dekhiye:", appUrl() + "#item-" + i.id);
   return lines.join("\n");
 }
+/* Customer apne client ko bheje: rate chahe to hi jaata hai, app ka link nahi jaata */
+function clientMessage(i, withRate) {
+  var lines = ["*" + i.name + "*"];
+  if (withRate) lines.push("Rate: " + rs(i.rate) + " / " + i.unit);
+  if (qtyText(i)) lines.push("Only " + qtyText(i));
+  if (i.description) lines.push(i.description);
+  return lines.join("\n");
+}
 function canSee(c, i) { return i.access === "all" || (i.access === "some" && i.allowed.indexOf(c.id) >= 0); }
 function vSendItem() {
   var i = state.admin.items.filter(function (x) { return x.id === state.itemId; })[0];
@@ -367,7 +404,7 @@ function vSendItem() {
   return '<div class="stack form"><div><button class="btn link" data-act="toItems">← Wapas</button></div>' +
     '<div class="row"><img class="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:4px" alt="" src="' + esc(i.thumb_url) + '"><div class="grow"><div class="code">' + esc(i.code) + '</div><h2>' + esc(i.name) + '</h2><div class="num">' + rs(i.rate) + " / " + esc(i.unit) + (qtyText(i) ? " · Only " + esc(qtyText(i)) : "") + "</div></div></div>" +
     '<div class="tip"><b>Photo ya video seedha bhejiye</b><span class="small muted">Button dabane par phone share karne ka menu kholega. Usme WhatsApp aur phir customer chuniye. Saath mein naam aur rate ka message bhi jayega.</span>' +
-    '<div class="row"><button class="btn sm" data-act="shareMedia" data-kind="photo">Photo bhejiye</button>' + (i.video_url ? '<button class="btn sm" data-act="shareMedia" data-kind="video">Video bhejiye</button>' : "") + "</div>" +
+    '<div class="row"><button class="btn sm" data-act="shareMedia" data-kind="photo">Photo share</button>' + (i.video_url ? '<button class="btn sm" data-act="shareMedia" data-kind="video">Video share</button>' : "") + "</div>" +
     '<div id="shareStatus" class="small muted"></div></div>' +
     '<div class="stack tight"><h2>Ya customer ko app ka link bhejiye</h2><p class="small muted">Customer link kholkar seedha isi sample par pahunchega.</p>' +
     (custs.length ? '<div class="list">' + custs.map(function (c) {
@@ -376,7 +413,10 @@ function vSendItem() {
     }).join("") + "</div>" : '<p class="muted small">Abhi koi chalu customer nahi hai.</p>') + "</div></div>";
 }
 async function shareMedia(kind, btn) {
-  var i = state.admin.items.filter(function (x) { return x.id === state.itemId; })[0];
+  var mine = state.view === "detail";
+  var list = mine ? state.catalog.items : state.admin.items;
+  var i = list.filter(function (x) { return x.id === state.itemId; })[0];
+  var text = mine ? clientMessage(i, $("shareRate") && $("shareRate").checked) : itemMessage(i, false);
   var st = $("shareStatus"), url = kind === "video" ? i.video_url : i.photo_url;
   st.textContent = kind === "video" ? "Video taiyar ho raha hai…" : "Photo taiyar ho rahi hai…";
   var r = await fetch(url);
@@ -384,7 +424,7 @@ async function shareMedia(kind, btn) {
   var blob = await r.blob();
   var ext = kind === "video" ? "mp4" : "jpg";
   var file = new File([blob], (i.code || "sample") + "." + ext, { type: kind === "video" ? "video/mp4" : "image/jpeg" });
-  var data = { files: [file], text: itemMessage(i, false) };
+  var data = { files: [file], text: text };
   if (navigator.canShare && navigator.canShare(data)) {
     st.textContent = "";
     try { await navigator.share(data); }
